@@ -13,4 +13,6 @@ DATA_FOLDER="/mnt/disks/data/prepared_data_for_model_training
 # gsutil cp gs://predictdb/gtex_v8/prepared_data/annotations/gtex_v8_eur_shapeit2_phased_maf01_snp_annot.chr${chrom}.txt ${DATA_FOLDER}/annotations/${chrom}
 # gsutil cp gs://predictdb/gtex_v8/prepared_data/genotypes/gtex_v8_eur_shapeit2_phased_maf01.chr${chrom}.txt.gz ${DATA_FOLDER}/genotypes
 
+source activate R
 Rscript gtex_tiss_chrom_training.R ${tiss} ${chrom}
+source deactivate
