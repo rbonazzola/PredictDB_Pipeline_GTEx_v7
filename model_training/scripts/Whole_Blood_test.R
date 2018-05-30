@@ -1,4 +1,4 @@
-setwd("/group/im-lab/nas40t2/scott/gtex_v7_imputed_europeans/model_training/scripts/")
+#setwd("/group/im-lab/nas40t2/scott/gtex_v7_imputed_europeans/model_training/scripts/")
 source("gtex_v7_nested_cv_elnet.R")
 
 shared_data_folder <- "/apps/shared_data/"
