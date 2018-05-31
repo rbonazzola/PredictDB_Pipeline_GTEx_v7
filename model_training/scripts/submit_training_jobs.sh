@@ -6,7 +6,7 @@ do
     for chrom in {1..22}
     do
         echo -e "    $chrom"
-        sbatch gtex_tiss_chr_elasticnet_slurm.sh --export=tiss=${tiss},chrom=${chrom} --job-name=gtex_training_${tiss}_${chrom}
+        sbatch --export=tiss=${tiss},chrom=${chrom} --job-name=gtex_training_${tiss}_${chrom} gtex_tiss_chr_elasticnet_slurm.sh 
         sleep .5
     done
 done
