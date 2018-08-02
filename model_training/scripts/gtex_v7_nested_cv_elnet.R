@@ -157,13 +157,16 @@ do_covariance <- function(gene_id, cis_gt, rsids, varIDs) {
 
 main <- function(snp_annot_file, gene_annot_file, genotype_file, expression_file,
                  covariates_file, chrom, prefix, maf=0.01, n_folds=10, n_train_test_folds=5,
-                 seed=NA, cis_window=1e6, alpha=0.5, null_testing=FALSE) {
+                 n_subsplit=NULL, subsplit_index=NULL,
+                 seed=NA, cis_window=1e6, alpha=0.5, null_testing=FALSE) 
+{
+  
   gene_annot <- get_gene_annotation(gene_annot_file, chrom)
   expr_df <- get_gene_expression(expression_file, gene_annot)
-  samples <- rownames(expr_df)
-  n_samples <- length(samples)
-  genes <- colnames(expr_df)
-  n_genes <- length(expr_df)
+  
+  samples <- rownames(expr_df); n_samples <- length(samples)
+  genes <- colnames(expr_df); n_genes <- length(expr_df)
+  
   snp_annot <- get_filtered_snp_annot(snp_annot_file)
   gt_df <- get_maf_filtered_genotype(genotype_file, maf, samples)
   covariates_df <- get_covariates(covariates_file, samples)
@@ -173,30 +176,40 @@ main <- function(snp_annot_file, gene_annot_file, genotype_file, expression_file
   set.seed(seed)
   
   # Prepare output data----
-  model_summary_file <- '../summary/' %&% prefix %&% '_chr' %&% chrom %&% '_model_summaries.txt'
+  if (!is.null(n_subsplit)) {
+    model_summary_file <- '../summary/' %&% prefix %&% '_chr' %&% chrom %&% '_subsp' %&% subsplit_index %&% '_of_' %&% n_subsplit %&% '_model_summaries.txt'
+    weights_file <- '../weights/' %&% prefix %&% '_chr' %&% chrom %&% '_subsp' %&% subsplit_index %&% '_of_' %&% n_subsplit %&% '_weights.txt'
+    tiss_chr_summ_f <- '../summary/' %&% prefix %&% '_chr' %&% chrom %&% '_subsp' %&% subsplit_index %&% '_of_' %&% n_subsplit %&% '_tiss_chr_summary.txt'
+    covariance_file <- '../covariances/' %&% prefix %&% '_chr' %&% chrom %&% '_subsp' %&% subsplit_index %&% '_of_' %&% n_subsplit %&% '_covariances.txt'
+  } else {
+    model_summary_file <- '../summary/' %&% prefix %&% '_chr' %&% chrom %&% '_model_summaries.txt'
+    weights_file <- '../weights/' %&% prefix %&% '_chr' %&% chrom %&% '_weights.txt'
+    tiss_chr_summ_f <- '../summary/' %&% prefix %&% '_chr' %&% chrom %&% '_tiss_chr_summary.txt'
+    covariance_file <- '../covariances/' %&% prefix %&% '_chr' %&% chrom %&% '_covariances.txt'
+  }
+  
   model_summary_cols <- c('gene_id', 'gene_name', 'gene_type', 'alpha', 'n_snps_in_window', 'n_snps_in_model', 'lambda_min_mse',
                           'test_R2_avg', 'test_R2_sd', 'cv_R2_avg', 'cv_R2_sd', 'in_sample_R2',
                           'nested_cv_fisher_pval', 'rho_avg', 'rho_se', 'rho_zscore', 'rho_avg_squared', 'zscore_pval',
                           'cv_rho_avg', 'cv_rho_se', 'cv_rho_avg_squared', 'cv_zscore_est', 'cv_zscore_pval', 'cv_pval_est')
   write(model_summary_cols, file = model_summary_file, ncol = 24, sep = '\t')
   
-  weights_file <- '../weights/' %&% prefix %&% '_chr' %&% chrom %&% '_weights.txt'
   weights_col <- c('gene_id', 'rsid', 'varID', 'ref', 'alt', 'beta')
   write(weights_col, file = weights_file, ncol = 6, sep = '\t')
   
-  tiss_chr_summ_f <- '../summary/' %&% prefix %&% '_chr' %&% chrom %&% '_tiss_chr_summary.txt'
   tiss_chr_summ_col <- c('n_samples', 'chrom', 'cv_seed', 'n_genes')
   tiss_chr_summ <- data.frame(n_samples, chrom, seed, n_genes)
   colnames(tiss_chr_summ) <- tiss_chr_summ_col
   write.table(tiss_chr_summ, file = tiss_chr_summ_f, quote = FALSE, row.names = FALSE, sep = '\t')
   
-  covariance_file <- '../covariances/' %&% prefix %&% '_chr' %&% chrom %&% '_covariances.txt'
   covariance_col <- c('GENE', 'RSID1', 'RSID2', 'VALUE')
   write(covariance_col, file = covariance_file, ncol = 4, sep = ' ')
   
   # Attempt to build model for each gene----
-  for (i in 1:n_genes) {
-    cat(i, "/", n_genes, "\n")
+  n_genes_i <- as.integer(n_genes*(subsplit_index-1)/n_subsplit+1)
+  n_genes_f <- as.integer(n_genes*subsplit_index/n_subsplit)
+  for (i in n_genes_i:n_genes_f) {
+    cat(as.character(Sys.time()), ": ", i, "/", n_genes, "\n")
     gene <- genes[i]
     gene_name <- gene_annot$gene_name[gene_annot$gene_id == gene]
     gene_type <- get_gene_type(gene_annot, gene)
@@ -209,12 +222,16 @@ main <- function(snp_annot_file, gene_annot_file, genotype_file, expression_file
       next
     }
     model_summary <- c(gene, gene_name, gene_type, alpha, ncol(cis_gt), 0, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)
-    if (ncol(cis_gt) >= 2) {
+    if (ncol(cis_gt) >= 2) 
+    {
       expression_vec <- expr_df[,i]
       adj_expression <- adjust_for_covariates(expression_vec, covariates_df)
+      
       if (null_testing)
         adj_expression <- sample(adj_expression)
+      
       perf_measures <- nested_cv_elastic_net_perf(cis_gt, adj_expression, n_samples, n_train_test_folds, n_folds, alpha)
+      # can we condense these lines?
       R2_avg <- perf_measures$R2_avg
       R2_sd <- perf_measures$R2_sd
       pval_est <- perf_measures$pval_est
@@ -223,15 +240,19 @@ main <- function(snp_annot_file, gene_annot_file, genotype_file, expression_file
       rho_zscore <- perf_measures$rho_zscore
       rho_avg_squared <- perf_measures$rho_avg_squared
       zscore_pval <- perf_measures$zscore_pval
+      
       # Fit on all data
       cv_fold_ids <- generate_fold_ids(length(adj_expression), n_folds)
       fit <- tryCatch(cv.glmnet(cis_gt, adj_expression, nfolds = n_folds, alpha = 0.5, type.measure='mse', foldid = cv_fold_ids, keep = TRUE),
                       error = function(cond) {message('Error'); message(geterrmessage()); list()})
       if (length(fit) > 0) {
+        #cv_R2_folds <- cv_corr_folds <- cv_zscore_folds <- cv_pval_folds <- rep(0, n_folds)
+        
         cv_R2_folds <- rep(0, n_folds)
         cv_corr_folds <- rep(0, n_folds)
         cv_zscore_folds <- rep(0, n_folds)
         cv_pval_folds <- rep(0, n_folds)
+        
         best_lam_ind <- which.min(fit$cvm)
         for (j in 1:n_folds) {
           fold_idxs <- which(cv_fold_ids == j)

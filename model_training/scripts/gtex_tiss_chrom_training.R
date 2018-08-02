@@ -5,6 +5,8 @@ source("gtex_v7_nested_cv_elnet.R")
 argv <- commandArgs(trailingOnly = TRUE)
 tiss <- argv[1]
 chrom <- argv[2]
+n_subsplit <- argv[3]
+subsplit_index <- argv[4]
 
 shared_data_folder <- "/apps/shared_data/"
 
@@ -15,4 +17,5 @@ covariates_file <- shared_data_folder %&% "covariates/" %&% tiss %&% "_Analysis.
 expression_file <- shared_data_folder %&% "expressions/" %&% tiss %&% "_Analysis.expression.txt"
 prefix <- tiss %&% "_nested_cv"
 
-main(snp_annot_file, gene_annot_file, genotype_file, expression_file, covariates_file, as.numeric(chrom), prefix, null_testing=FALSE)
+main(snp_annot_file, gene_annot_file, genotype_file, expression_file, covariates_file, 
+     as.numeric(chrom), prefix, n_subsplit=as.integer(n_subsplit), subsplit_index=as.integer(subsplit_index), null_testing=FALSE)

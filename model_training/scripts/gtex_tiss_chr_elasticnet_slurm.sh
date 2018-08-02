@@ -26,5 +26,5 @@ if [ ! -e ${DATA_FOLDER}/genotypes/gtex_v8_eur_shapeit2_phased_maf01.chr${chrom}
 fi
 
 source activate R
-Rscript gtex_tiss_chrom_training.R ${tiss} ${chrom}
+Rscript gtex_tiss_chrom_training.R ${tiss} ${chrom} ${n_subsplit} ${subsplit_index}
 source deactivate
